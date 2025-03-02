@@ -20,7 +20,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{} xyz suffix", args[0].green());
         println!("");
         println!("Parameters:");
-        println!("  {} - 3-8 character pattern to search for", "pattern".cyan());
+        println!(
+            "  {} - 3-8 character pattern to search for",
+            "pattern".cyan()
+        );
         println!("  {} - Either 'prefix' or 'suffix'", "position".cyan());
         return Ok(());
     }
@@ -30,21 +33,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Validate inputs
     if pattern.len() < 3 || pattern.len() > 8 {
-        println!("{} Pattern must be between 3-8 characters long", "ERROR:".red().bold());
+        println!(
+            "{} Pattern must be between 3-8 characters long",
+            "ERROR:".red().bold()
+        );
         return Ok(());
     }
 
     if position != "prefix" && position != "suffix" {
-        println!("{} Position must be 'prefix' or 'suffix'", "ERROR:".red().bold());
+        println!(
+            "{} Position must be 'prefix' or 'suffix'",
+            "ERROR:".red().bold()
+        );
         return Ok(());
     }
 
     // Set the server URL
     let server = "http://127.0.0.1:3001";
 
-    println!("{} Generating Solana address with {} '{}'...", 
-        "⏳".yellow(), position.cyan(), pattern.cyan().bold());
-    
+    println!(
+        "{} Generating Solana address with {} '{}'...",
+        "⏳".yellow(),
+        position.cyan(),
+        pattern.cyan().bold()
+    );
+
     // Start the job
     let job_id = match start_job(server, pattern, position).await {
         Ok(id) => {
@@ -53,10 +66,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
             id
-        },
+        }
         Err(e) => {
             println!("{} {}", "ERROR:".red().bold(), e);
-            println!("Is the server running? Start it with {}", "./run_server.sh".green());
+            println!(
+                "Is the server running? Start it with {}",
+                "./run_server.sh".green()
+            );
             return Ok(());
         }
     };
@@ -64,7 +80,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Track time
     let start_time = Instant::now();
     let mut dots = 0;
-    
+
     // Poll for results
     loop {
         match check_job_status(server, &job_id).await {
@@ -72,12 +88,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if status == "complete" {
                     if let Some((pub_key, priv_key)) = result {
                         let elapsed = start_time.elapsed().as_secs_f32();
-                        println!("\n{} Address found in {:.2} seconds!", "✅".green(), elapsed);
+                        println!(
+                            "\n{} Address found in {:.2} seconds!",
+                            "✅".green(),
+                            elapsed
+                        );
                         println!("\n{}", "PUBLIC KEY:".green().bold());
                         println!("{}", pub_key);
                         println!("\n{}", "PRIVATE KEY:".yellow().bold());
                         println!("{}", priv_key);
-                        println!("\n{}", "⚠️  IMPORTANT: Save your private key securely! ⚠️".red().bold());
+                        println!(
+                            "\n{}",
+                            "⚠️  IMPORTANT: Save your private key securely! ⚠️"
+                                .red()
+                                .bold()
+                        );
                         break;
                     }
                 } else if status == "error" {
@@ -85,22 +110,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     break;
                 } else {
                     // Show progress indicator
-                    print!("\r{} Searching{} elapsed: {:.1}s", 
-                           "⏳".yellow(),
-                           ".".repeat(dots % 4 + 1),
-                           start_time.elapsed().as_secs_f32());
+                    print!(
+                        "\r{} Searching{} elapsed: {:.1}s",
+                        "⏳".yellow(),
+                        ".".repeat(dots % 4 + 1),
+                        start_time.elapsed().as_secs_f32()
+                    );
                     dots += 1;
                     // Flush stdout to make sure the progress shows immediately
                     use std::io::Write;
                     std::io::stdout().flush().unwrap();
                 }
-            },
+            }
             Err(e) => {
                 println!("\n{} {}", "ERROR:".red().bold(), e);
                 break;
             }
         }
-        
+
         sleep(Duration::from_millis(500)).await;
     }
 
@@ -122,7 +149,10 @@ async fn start_job(server: &str, pattern: &str, position: &str) -> Result<String
     Ok(json["job_id"].as_str().unwrap_or("").to_string())
 }
 
-async fn check_job_status(server: &str, job_id: &str) -> Result<(String, Option<(String, String)>), reqwest::Error> {
+async fn check_job_status(
+    server: &str,
+    job_id: &str,
+) -> Result<(String, Option<(String, String)>), reqwest::Error> {
     let client = reqwest::Client::new();
     let res = client
         .get(&format!("{}/status/{}", server, job_id))
@@ -130,10 +160,10 @@ async fn check_job_status(server: &str, job_id: &str) -> Result<(String, Option<
         .await?;
 
     let json: Value = res.json().await?;
-    
+
     if let Some(status) = json.get("status") {
         let status_str = status.as_str().unwrap_or("");
-        
+
         if status_str == "complete" {
             if let Some(result) = json.get("result") {
                 let pub_key = result["public_key"].as_str().unwrap_or("").to_string();
@@ -141,9 +171,9 @@ async fn check_job_status(server: &str, job_id: &str) -> Result<(String, Option<
                 return Ok((status_str.to_string(), Some((pub_key, priv_key))));
             }
         }
-        
+
         return Ok((status_str.to_string(), None));
     }
-    
+
     Ok(("error".to_string(), None))
 }

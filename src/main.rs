@@ -64,27 +64,30 @@ struct AppState {
 }
 
 // Generate a vanity address
-async fn generate_address(req: web::Json<GenerateRequest>, data: web::Data<AppState>) -> impl Responder {
+async fn generate_address(
+    req: web::Json<GenerateRequest>,
+    data: web::Data<AppState>,
+) -> impl Responder {
     let pattern = req.pattern.clone();
     let position = req.position.clone();
-    
+
     // Validate the pattern and position
     if pattern.is_empty() {
         return HttpResponse::BadRequest().json(serde_json::json!({
             "error": "Pattern cannot be empty"
         }));
     }
-    
+
     if position != "prefix" && position != "suffix" {
         return HttpResponse::BadRequest().json(serde_json::json!({
             "error": "Position must be 'prefix' or 'suffix'"
         }));
     }
-    
+
     // Create a new job
     let job_id = Uuid::new_v4().to_string();
     let cancel_flag = Arc::new(AtomicBool::new(false));
-    
+
     let job = Job {
         status: "pending".to_string(),
         pattern: pattern.clone(),
@@ -94,31 +97,32 @@ async fn generate_address(req: web::Json<GenerateRequest>, data: web::Data<AppSt
         result: None,
         error: None,
     };
-    
+
     // Store the job
     data.jobs.insert(job_id.clone(), Arc::new(Mutex::new(job)));
-    
+
     // Launch background task to find the address
     let job_ref = data.jobs.get(&job_id).unwrap().clone();
     let pattern_clone = pattern.clone();
     let position_clone = position.clone();
-    
+
     tokio::spawn(async move {
         // Update job status to running
         {
             let mut job = job_ref.lock().await;
             job.status = "running".to_string();
         }
-        
+
         // Find address in background
         let cancel_flag_clone = cancel_flag.clone();
         let pattern_clone2 = pattern_clone.clone();
         let position_clone2 = position_clone.clone();
-        
+
         let result = tokio::task::spawn_blocking(move || {
             find_vanity_address(&pattern_clone2, &position_clone2, cancel_flag_clone)
-        }).await;
-        
+        })
+        .await;
+
         // Update job with result
         let mut job = job_ref.lock().await;
         match result {
@@ -128,49 +132,49 @@ async fn generate_address(req: web::Json<GenerateRequest>, data: web::Data<AppSt
                     public_key: keypair.pubkey().to_string(),
                     private_key: bs58::encode(&keypair.to_bytes()).into_string(),
                 });
-            },
+            }
             Ok(Err(err)) => {
                 job.status = "error".to_string();
                 job.error = Some(err);
-            },
+            }
             Err(_) => {
                 job.status = "error".to_string();
                 job.error = Some("Task was canceled".to_string());
             }
         }
     });
-    
+
     HttpResponse::Ok().json(GenerateResponse { job_id })
 }
 
 // Function to find a vanity address
 fn find_vanity_address(
-    pattern: &str, 
-    position: &str, 
-    cancel_flag: Arc<AtomicBool>
+    pattern: &str,
+    position: &str,
+    cancel_flag: Arc<AtomicBool>,
 ) -> Result<Keypair, String> {
     let pattern_lower = pattern.to_lowercase();
-    
+
     // Generate keypairs in parallel
     let num_cpus = num_cpus::get();
     let result = (0..num_cpus).into_par_iter().find_map_any(|_| {
         while !cancel_flag.load(Ordering::Relaxed) {
             let keypair = Keypair::new();
             let pubkey_str = keypair.pubkey().to_string();
-            
+
             let match_found = match position {
                 "prefix" => pubkey_str.to_lowercase().starts_with(&pattern_lower),
                 "suffix" => pubkey_str.to_lowercase().ends_with(&pattern_lower),
                 _ => false,
             };
-            
+
             if match_found {
                 return Some(keypair);
             }
         }
         None
     });
-    
+
     match result {
         Some(keypair) => Ok(keypair),
         None => Err("Operation was canceled".to_string()),
@@ -180,7 +184,7 @@ fn find_vanity_address(
 // Get job status
 async fn get_status(path: web::Path<String>, data: web::Data<AppState>) -> impl Responder {
     let job_id = path.into_inner();
-    
+
     match data.jobs.get(&job_id) {
         Some(job_ref) => {
             let job = job_ref.lock().await;
@@ -191,7 +195,7 @@ async fn get_status(path: web::Path<String>, data: web::Data<AppState>) -> impl 
                 error: job.error.clone(),
             };
             HttpResponse::Ok().json(response)
-        },
+        }
         None => HttpResponse::NotFound().json(serde_json::json!({
             "error": "Job not found"
         })),
@@ -201,16 +205,16 @@ async fn get_status(path: web::Path<String>, data: web::Data<AppState>) -> impl 
 // Cancel a job
 async fn cancel_job(path: web::Path<String>, data: web::Data<AppState>) -> impl Responder {
     let job_id = path.into_inner();
-    
+
     match data.jobs.get(&job_id) {
         Some(job_ref) => {
             let job = job_ref.lock().await;
             job.cancel_flag.store(true, Ordering::Relaxed);
-            
+
             HttpResponse::Ok().json(serde_json::json!({
                 "status": "cancellation_requested"
             }))
-        },
+        }
         None => HttpResponse::NotFound().json(serde_json::json!({
             "error": "Job not found"
         })),
@@ -229,7 +233,7 @@ async fn health_check() -> impl Responder {
 async fn cleanup_old_jobs(data: web::Data<AppState>) {
     loop {
         sleep(Duration::from_secs(3600)).await; // Run every hour
-        
+
         let now = Instant::now();
         let to_remove: Vec<String> = data
             .jobs
@@ -244,7 +248,7 @@ async fn cleanup_old_jobs(data: web::Data<AppState>) {
                 }
             })
             .collect();
-        
+
         for job_id in to_remove {
             data.jobs.remove(&job_id);
         }
@@ -257,13 +261,13 @@ async fn main() -> std::io::Result<()> {
     let app_state = web::Data::new(AppState {
         jobs: DashMap::new(),
     });
-    
+
     // Start cleanup task
     let state_for_cleanup = app_state.clone();
     tokio::spawn(async move {
         cleanup_old_jobs(state_for_cleanup).await;
     });
-    
+
     println!("\n");
     println!(" ███████╗ ██████╗ ██╗      █████╗ ███╗   ██╗ █████╗     ██╗   ██╗ █████╗ ███╗   ██╗██╗████████╗██╗   ██╗");
     println!(" ██╔════╝██╔═══██╗██║     ██╔══██╗████╗  ██║██╔══██╗    ██║   ██║██╔══██╗████╗  ██║██║╚══██╔══╝╚██╗ ██╔╝");
@@ -274,28 +278,32 @@ async fn main() -> std::io::Result<()> {
     println!("    ");
     println!("                                Built by Ban Github: @ohbanned                                    ");
     println!();
-    
+
     // Bind server
     let server_address = "127.0.0.1:3001";
     println!("🚀 Server starting on: http://{}", server_address);
     println!();
-    
+
     // Print new CLI usage instructions
     println!("📋 QUICK USAGE GUIDE:");
     println!("  1. Keep this server running in this terminal");
     println!("  2. Open a new terminal and run one of these commands:");
     println!();
-    println!("     \x1b[1;32m./run_cli.sh abc prefix\x1b[0m    # Generate address starting with 'abc'");
-    println!("     \x1b[1;32m./run_cli.sh xyz suffix\x1b[0m    # Generate address ending with 'xyz'");
+    println!(
+        "     \x1b[1;32m./run_cli.sh abc prefix\x1b[0m    # Generate address starting with 'abc'"
+    );
+    println!(
+        "     \x1b[1;32m./run_cli.sh xyz suffix\x1b[0m    # Generate address ending with 'xyz'"
+    );
     println!();
     println!("     Replace 'abc' or 'xyz' with your desired 3-8 character pattern");
     println!();
     println!("  3. That's it! Your address will be generated and displayed");
     println!();
-    
+
     println!("🔍 Press Ctrl+C to stop the server");
     println!();
-    
+
     // Print API usage for advanced users
     println!("💡 Advanced API Usage:");
     println!("  Generate a vanity address:");
@@ -303,10 +311,13 @@ async fn main() -> std::io::Result<()> {
     println!("    {{\"job_id\":\"123e4567-e89b-12d3-a456-426614174000\"}}");
     println!();
     println!("  Check status using the job_id:");
-    println!("    curl http://{}/status/123e4567-e89b-12d3-a456-426614174000", server_address);
+    println!(
+        "    curl http://{}/status/123e4567-e89b-12d3-a456-426614174000",
+        server_address
+    );
     println!("    {{\"status\":\"complete\",\"result\":{{\"public_key\":\"abc...\",\"private_key\":\"...\"}}}}", );
     println!();
-    
+
     // Start server
     HttpServer::new(move || {
         // Configure CORS
@@ -315,7 +326,7 @@ async fn main() -> std::io::Result<()> {
             .allow_any_method()
             .allow_any_header()
             .max_age(3600);
-        
+
         App::new()
             .wrap(cors)
             .app_data(app_state.clone())
