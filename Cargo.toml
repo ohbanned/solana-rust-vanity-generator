@@ -9,6 +9,7 @@ repository = "https://github.com/ohbanned/solana-vanity-generator"
 readme = "README.md"
 keywords = ["solana", "blockchain", "cryptocurrency", "vanity-address", "wallet"]
 categories = ["cryptography", "web-programming"]
+default-run = "solana-vanity-generator"
 
 [dependencies]
 actix-web = "4.4.0"
@@ -25,3 +26,21 @@ num_cpus = "1.16.0"
 log = "0.4"
 env_logger = "0.10"
 chrono = { version = "0.4", features = ["serde"] }
+clap = "2.33" # CLI argument parsing
+reqwest = { version = "0.11", features = ["json"] } # HTTP client
+indicatif = "0.17.7" # Progress bars and spinners
+cursive = "0.20" # TUI library for interactive terminal UI
+crossterm = "0.27" # Terminal control library
+colored = "3.0.0"
+
+[[bin]]
+name = "solana-vanity-generator"
+path = "src/main.rs"
+
+[[bin]]
+name = "vanity"
+path = "src/bin/vanity.rs"
+
+[[bin]]
+name = "vanity-tui"
+path = "src/bin/vanity_tui.rs"
