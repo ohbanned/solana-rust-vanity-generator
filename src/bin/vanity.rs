@@ -1,5 +1,4 @@
 use colored::*;
-use reqwest;
 use serde_json::Value;
 use std::env;
 use std::time::{Duration, Instant};
