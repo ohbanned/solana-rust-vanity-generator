@@ -14,11 +14,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.len() < 3 {
         println!("{}", "Usage:".yellow().bold());
         println!("{} <pattern> <position>", args[0].green());
-        println!("");
+        println!();
         println!("Example:");
         println!("{} abc prefix", args[0].green());
         println!("{} xyz suffix", args[0].green());
-        println!("");
+        println!();
         println!("Parameters:");
         println!(
             "  {} - 3-8 character pattern to search for",
@@ -137,7 +137,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn start_job(server: &str, pattern: &str, position: &str) -> Result<String, reqwest::Error> {
     let client = reqwest::Client::new();
     let res = client
-        .post(&format!("{}/generate", server))
+        .post(format!("{}/generate", server))
         .json(&serde_json::json!({
             "pattern": pattern,
             "position": position,
@@ -155,7 +155,7 @@ async fn check_job_status(
 ) -> Result<(String, Option<(String, String)>), reqwest::Error> {
     let client = reqwest::Client::new();
     let res = client
-        .get(&format!("{}/status/{}", server, job_id))
+        .get(format!("{}/status/{}", server, job_id))
         .send()
         .await?;
 

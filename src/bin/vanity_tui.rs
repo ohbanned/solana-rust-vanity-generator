@@ -113,7 +113,7 @@ async fn start_job(
 ) -> Result<String, reqwest::Error> {
     let client = reqwest::Client::new();
     let res = client
-        .post(&format!("{}/generate", server))
+        .post(format!("{}/generate", server))
         .json(&serde_json::json!({
             "pattern": pattern,
             "position": position,
@@ -131,7 +131,7 @@ async fn check_job_status(
 ) -> Result<(String, Option<(String, String)>), reqwest::Error> {
     let client = reqwest::Client::new();
     let res = client
-        .get(&format!("{}/status/{}", server, job_id))
+        .get(format!("{}/status/{}", server, job_id))
         .send()
         .await?;
 
@@ -190,7 +190,7 @@ fn generate_address(siv: &mut Cursive, server: String, pattern: String, position
 
         rt.block_on(async {
             // Start the job
-            match start_job(server_clone.clone(), pattern_clone, position_clone).await {
+            match start_job(server_clone, pattern_clone, position_clone).await {
                 Ok(job_id) => {
                     if job_id.is_empty() {
                         sender
@@ -203,7 +203,7 @@ fn generate_address(siv: &mut Cursive, server: String, pattern: String, position
 
                     // Poll for results
                     loop {
-                        match check_job_status(server_clone.clone(), job_id.clone()).await {
+                        match check_job_status(server_clone, job_id).await {
                             Ok((status, result)) => {
                                 if status == "complete" {
                                     if let Some((pub_key, priv_key)) = result {

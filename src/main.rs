@@ -50,7 +50,9 @@ struct HealthResponse {
 // Internal job tracking
 struct Job {
     status: String,
+    #[allow(dead_code)]
     pattern: String,
+    #[allow(dead_code)]
     position: String,
     start_time: Instant,
     cancel_flag: Arc<AtomicBool>,
